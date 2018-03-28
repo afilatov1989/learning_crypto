@@ -1,33 +1,62 @@
 from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
+from Crypto import Random
 
 
-def cbc_encrypt(plain: list, key: list) -> list:
+def cbc_encrypt(plain: bytes, key: bytes, iv: bytes = Random.new().read(AES.block_size)) -> bytes:
+    cipher = iv
+    pad = 16 - (len(plain) % 16)
+    plain += bytes([pad]) * pad
+
+    prev_ciphered_block = iv
+    i = 0
+    while i < len(cipher):
+        cur_block = plain[i:i + 16]
+        cur_ciphered_block = aes_encrypt_block(bytes(a ^ b for (a, b) in zip(cur_block, prev_ciphered_block)), key)
+        cipher += cur_ciphered_block
+        prev_ciphered_block = cur_ciphered_block
+        i += 16
+
+    return cipher
+
+
+def cbc_decrypt(cipher: bytes, key: bytes) -> bytes:
+    iv = cipher[:16]
+    i = 16
+    prev_block = iv
+    plain = b''
+    while i < len(cipher):
+        cur_block = cipher[i:i + 16]
+        dec_cur_block = aes_decrypt_block(cur_block, key)
+        plain += bytes(a ^ b for (a, b) in zip(dec_cur_block, prev_block))
+        prev_block = cur_block
+        i += 16
+
+    pad = int(plain[-1])
+    return plain[:(-1) * pad]
+
+
+def ctr_encrypt(plain: bytes, key: bytes) -> bytes:
     cipher = plain
     return cipher
 
 
-def cbc_decrypt(cipher: list, key: list) -> list:
+def ctr_decrypt(cipher: bytes, key: bytes) -> bytes:
     plain = cipher
     return plain
 
 
-def ctr_encrypt(plain: list, key: list) -> list:
-    cipher = plain
-    return cipher
+def aes_encrypt_block(block: bytes, key: bytes) -> bytes:
+    encryptor = AES.new(key, AES.MODE_ECB)
+    return encryptor.encrypt(block)
 
 
-def ctr_decrypt(cipher: list, key: list) -> list:
-    plain = cipher
-    return plain
+def aes_decrypt_block(block: bytes, key: bytes) -> bytes:
+    encryptor = AES.new(key, AES.MODE_ECB)
+    return encryptor.decrypt(block)
 
 
-def unhexify_string(line):
-    return [int(line[i:i + 2], 16) for i in range(0, len(line), 2)]
-
-
-def hexlist_to_string(list):
-    return ''.join([chr(ch) for ch in list])
+def unhexify_string(line: str) -> bytes:
+    return bytes([int(line[i:i + 2], 16) for i in range(0, len(line), 2)])
 
 
 if __name__ == "__main__":
@@ -37,16 +66,20 @@ if __name__ == "__main__":
 
     pt = cbc_decrypt(cbc_ct1, cbc_key)
     print('cbc_pt1:')
-    print(hexlist_to_string(pt))
-    assert cbc_encrypt(pt, cbc_key) == cbc_ct1
+    print(pt)
+
+    # use the same IV as above for testing purposes
+    assert cbc_encrypt(pt, cbc_key, cbc_ct1[:16]) == cbc_ct1
 
     cbc_ct2 = unhexify_string(
         '5b68629feb8606f9a6667670b75b38a5b4832d0f26e1ab7da33249de7d4afc48e713ac646ace36e872ad5fb8a512428a6e21364b0c374df45503473c5242a253')
 
     pt = cbc_decrypt(cbc_ct2, cbc_key)
     print('cbc_pt2:')
-    print(hexlist_to_string(pt))
-    assert cbc_encrypt(pt, cbc_key) == cbc_ct2
+    print(pt)
+
+    # use the same IV as above for testing purposes
+    assert cbc_encrypt(pt, cbc_key, cbc_ct2[:16]) == cbc_ct2
 
     ctr_key = unhexify_string('36f18357be4dbd77f050515c73fcf9f2')
     ctr_ct1 = unhexify_string(
@@ -54,7 +87,7 @@ if __name__ == "__main__":
 
     pt = ctr_decrypt(ctr_ct1, ctr_key)
     print('ctr_pt1:')
-    print(hexlist_to_string(pt))
+    print(pt)
     assert ctr_encrypt(pt, cbc_key) == ctr_ct1
 
     ctr_ct2 = unhexify_string(
@@ -62,5 +95,5 @@ if __name__ == "__main__":
 
     pt = ctr_decrypt(ctr_ct2, ctr_key)
     print('ctr_pt2:')
-    print(hexlist_to_string(pt))
+    print(pt)
     assert ctr_encrypt(pt, cbc_key) == ctr_ct2
