@@ -9,7 +9,7 @@ def cbc_encrypt(plain: bytes, key: bytes, iv: bytes = Random.new().read(AES.bloc
 
     prev_ciphered_block = iv
     i = 0
-    while i < len(cipher):
+    while i < len(plain):
         cur_block = plain[i:i + 16]
         cur_ciphered_block = aes_encrypt_block(bytes(a ^ b for (a, b) in zip(cur_block, prev_ciphered_block)), key)
         cipher += cur_ciphered_block
@@ -35,13 +35,32 @@ def cbc_decrypt(cipher: bytes, key: bytes) -> bytes:
     return plain[:(-1) * pad]
 
 
-def ctr_encrypt(plain: bytes, key: bytes) -> bytes:
-    cipher = plain
+def ctr_encrypt(plain: bytes, key: bytes, iv: bytes = Random.new().read(AES.block_size)) -> bytes:
+    cipher = iv
+
+    i = 0
+    while i < len(plain):
+        ctr = (int.from_bytes(iv, byteorder='big') + int(i / 16)) % (2 ** (16 * 8))
+        enc_ctr = aes_encrypt_block(int.to_bytes(ctr, 16, byteorder='big'), key)
+        cur_block = plain[i:min(i + 16, len(plain))]
+        cipher += bytes(a ^ b for (a, b) in zip(cur_block, enc_ctr[:len(cur_block)]))
+        i += 16
+
     return cipher
 
 
 def ctr_decrypt(cipher: bytes, key: bytes) -> bytes:
-    plain = cipher
+    iv = cipher[:16]
+    plain = b''
+
+    i = 16
+    while i < len(cipher):
+        ctr = (int.from_bytes(iv, byteorder='big') + int(i / 16) - 1) % (2 ** (16 * 8))
+        enc_ctr = aes_encrypt_block(int.to_bytes(ctr, 16, byteorder='big'), key)
+        cur_block = cipher[i:min(i + 16, len(cipher))]
+        plain += bytes(a ^ b for (a, b) in zip(cur_block, enc_ctr[:len(cur_block)]))
+        i += 16
+
     return plain
 
 
@@ -88,7 +107,9 @@ if __name__ == "__main__":
     pt = ctr_decrypt(ctr_ct1, ctr_key)
     print('ctr_pt1:')
     print(pt)
-    assert ctr_encrypt(pt, cbc_key) == ctr_ct1
+
+    # use the same IV as above for testing purposes
+    assert ctr_encrypt(pt, ctr_key, ctr_ct1[:16]) == ctr_ct1
 
     ctr_ct2 = unhexify_string(
         '770b80259ec33beb2561358a9f2dc617e46218c0a53cbeca695ae45faa8952aa0e311bde9d4e01726d3184c34451')
@@ -96,4 +117,6 @@ if __name__ == "__main__":
     pt = ctr_decrypt(ctr_ct2, ctr_key)
     print('ctr_pt2:')
     print(pt)
-    assert ctr_encrypt(pt, cbc_key) == ctr_ct2
+
+    # use the same IV as above for testing purposes
+    assert ctr_encrypt(pt, ctr_key, ctr_ct2[:16]) == ctr_ct2
