@@ -21,7 +21,7 @@ def xgcd(a, b):
         if a == 0:
             return b, a2 * aneg, b2 * bneg
         quot = -(b // a)
-        b = b % a;
+        b = b % a
         a2 = a2 + quot * a1
         b2 = b2 + quot * b1
         if b == 0:
